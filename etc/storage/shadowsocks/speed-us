@@ -1,0 +1,4 @@
+ipset add gfwlist 50.116.14.9
+wget -O  /dev/null http://speedtest.fremont.linode.com/100MB-fremont.bin
+ipset del gfwlist 50.116.14.9
+

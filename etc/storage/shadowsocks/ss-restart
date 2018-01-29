@@ -1,0 +1,74 @@
+#!/bin/sh
+
+while [ -n "`pidof ss-watchdog`" ] ; do
+	kill -9 "`pidof ss-watchdog`"
+	sleep 1
+done
+echo "ss-watchdog killed."
+
+while [ -n "`pidof kcptun_client`" ] ; do
+	kill -9 "`pidof kcptun_client`"
+	sleep 1
+done
+echo "kcptun_client killed."
+
+while [ -n "`pidof ss-redir`" ] ; do
+	kill -9 "`pidof ss-redir`"
+	sleep 1
+done
+echo "ss-redir killed."
+
+while [ -n "`pidof ss-local`" ] ; do
+	kill -9 "`pidof ss-local`"
+	sleep 1
+done
+echo "ss-local killed."
+
+while [ -n "`pidof dns-forwarder`" ] ; do
+	kill -9 "`pidof dns-forwarder`"
+	sleep 1
+done
+echo "dns-forwarder killed."
+
+ipset destroy gfwlist
+ipset create gfwlist hash:net
+ipset add gfwlist 8.8.8.8
+ipset add gfwlist 8.8.4.4
+ipset add gfwlist 91.108.4.0/22
+ipset add gfwlist 91.108.56.0/22
+ipset add gfwlist 109.239.140.0/24
+ipset add gfwlist 149.154.160.0/20
+
+iptables -t nat -D PREROUTING -i br0 -p tcp -m set --match-set gfwlist dst -j REDIRECT --to-port 1081
+iptables -t nat -D OUTPUT -p tcp -m set --match-set gfwlist dst -j REDIRECT --to-port 1081
+
+iptables -t nat -I PREROUTING -i br0 -p tcp -m set --match-set gfwlist dst -j REDIRECT --to-port 1081
+iptables -t nat -I OUTPUT -p tcp -m set --match-set gfwlist dst -j REDIRECT --to-port 1081
+
+iptables -t nat -D PREROUTING -i br0 -p udp -d 8.8.4.4 --dport 53 -j REDIRECT --to-ports 53
+iptables -t nat -D PREROUTING -i br0 -p udp -d 8.8.8.8 --dport 53 -j REDIRECT --to-ports 53
+
+iptables -t nat -I PREROUTING -i br0 -p udp -d 8.8.4.4 --dport 53 -j REDIRECT --to-ports 53
+iptables -t nat -I PREROUTING -i br0 -p udp -d 8.8.8.8 --dport 53 -j REDIRECT --to-ports 53
+
+export PATH=$PATH:/etc/storage/shadowsocks
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/etc/storage/shadowsocks
+
+CONFIG_KCPTUN=/etc/storage/shadowsocks/kcptun.json
+CONFIG_SS=/etc/storage/shadowsocks/shadowsocks.json
+
+if [ -f $CONFIG_KCPTUN ]; then
+	kcptun_client -c $CONFIG_KCPTUN > /dev/null 2>&1 &
+	echo "kcptun_client started."
+fi
+
+ss-redir -c $CONFIG_SS -b 0.0.0.0 -l 1081 >/dev/null 2>&1 &
+echo "ss-redir started."
+ss-local -c $CONFIG_SS -b 0.0.0.0 -l 1080 >/dev/null 2>&1 &
+echo "ss-local started."
+
+dns-forwarder -b 127.0.0.1 -p 5353 >/dev/null 2>&1 &
+echo "dns-forwarder started."
+
+ss-watchdog >/dev/null 2>&1 &
+echo "ss-watchdog started."

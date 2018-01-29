@@ -1,0 +1,27 @@
+#!/bin/sh
+
+while true; do
+	sleep 60
+
+	wget -s -q -T 10 www.google.com.hk
+	if [ "$?" == "0" ]; then
+		echo "No problem."
+		mtk_gpio -d 8 1
+		mtk_gpio -d 10 1
+		mtk_gpio -d 11 0
+	else
+		wget -s -q -T 10 www.baidu.com
+		if [ "$?" == "0" ]; then
+			logger -t "shadowsocks" "Problem detected, restart shadowsocks."
+			mtk_gpio -d 8 1
+			mtk_gpio -d 10 0
+			mtk_gpio -d 11 1
+			/etc/storage/shadowsocks/ss-restart
+		else
+			echo "Network problem. Do nothing."
+			mtk_gpio -d 8 0
+			mtk_gpio -d 10 0
+			mtk_gpio -d 11 0
+		fi
+	fi
+done
